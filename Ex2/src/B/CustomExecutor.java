@@ -2,9 +2,11 @@ package B;
 
 import java.util.concurrent.*;
 
-public class CustomExecutor extends ThreadPoolExecutor {
-    private int Prioritytask;
+import static java.lang.Integer.MAX_VALUE;
 
+public class CustomExecutor extends ThreadPoolExecutor {
+    private int[] Prioritytask = new int[10];
+    private boolean isshutdown = false;
 
     public CustomExecutor() {
         super((Runtime.getRuntime().availableProcessors())/2, (Runtime.getRuntime().availableProcessors())-1,
@@ -17,10 +19,16 @@ public class CustomExecutor extends ThreadPoolExecutor {
 
 
     public <T> Future<T> submitT(Task task) {//1
-        if (task == null) throw new NullPointerException();
-        myfuture<T> t = maketask(task);
-        execute(t);
-        return t;
+        if(isshutdown==false) {
+            if (task == null) throw new NullPointerException();
+            this.Prioritytask[task.getTaskType().getPriorityValue()]++;
+            myfuture<T> t = maketask(task);
+            execute(t);
+            return t;
+        }else{
+            System.err.println("CustomExecutor is shutdown");
+            return null;
+        }
     }
     public Future submit(Task task){
         if (task == null) throw new NullPointerException();
@@ -41,24 +49,25 @@ public class CustomExecutor extends ThreadPoolExecutor {
     }
 
 
+
     @Override
-    protected void afterExecute(Runnable r, Throwable t) {
-        if(!super.getQueue().isEmpty()){
-            if (((myfuture) r).getPriority() < ((myfuture) super.getQueue().peek()).getPriority()) {
-                setPrioritytask(((myfuture) super.getQueue().peek()).getPriority());
-            }
-        } else{setPrioritytask(0);}
+    protected void beforeExecute(Thread t, Runnable r) {
+        myfuture r1 = (myfuture) r;
+        this.Prioritytask[r1.getPriority()]--;
     }
 
-    public void setPrioritytask(int prioritytask) {
-        Prioritytask = prioritytask;
-    }
+
     public int getCurrentMax() {//10
-        return this.Prioritytask;
+        for (int i = 1; i < 10; i++) {
+            if(this.Prioritytask[i]!=0) return i;
+        }
+        return -1;
     }
 
 
-    public void gracefullyTerminate() {
+    public void gracefullyTerminate() throws InterruptedException {
+        this.isshutdown=true;
+        TimeUnit.SECONDS.sleep(1);
         super.shutdown();
 
 
